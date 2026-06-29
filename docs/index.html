@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diffusion LM from scratch — watch text denoise</title>
+<meta name="description" content="A masked (absorbing-state) diffusion language model trained from scratch on TinyStories. Watch real generations denoise from all-[MASK] to text, token by token.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<header class="site-head">
+  <div class="wrap head-inner">
+    <span class="brand"><span class="brand-mark">◆</span> diffusionlm</span>
+    <nav class="nav">
+      <a href="#demo">Demo</a>
+      <a href="#how">How it works</a>
+      <a href="#results">Results</a>
+      <a class="ghost-btn" href="https://github.com/tchauffi/diffusionlm-from-scratch" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero wrap">
+    <div class="hero-copy">
+      <span class="kicker">diffusion language model · from scratch</span>
+      <h1>Watch a sentence<br><span class="grad">condense out of noise.</span></h1>
+      <p class="lede">
+        Most language models write left to right, one token at a time. This one doesn't.
+        It starts from a sequence of pure <code class="mask-chip">[MASK]</code> and
+        <strong>denoises the whole thing at once</strong> — committing the tokens it's
+        surest about first, in whatever order the meaning falls into place.
+      </p>
+      <p class="lede sub">
+        Every animation below is a <strong>real generation</strong> from a 142M-parameter
+        model I trained from scratch on TinyStories. Each token is tinted by its ID, like
+        tiktoken — so you can watch the vocabulary light up as the story resolves.
+      </p>
+      <div class="hero-stats">
+        <div class="stat"><b>142M</b><span>parameters</span></div>
+        <div class="stat"><b>8,192</b><span>token vocab</span></div>
+        <div class="stat"><b>2.18</b><span>eval cross-entropy</span></div>
+        <div class="stat"><b>absorbing</b><span>state diffusion</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="demo" class="demo wrap">
+    <div class="panel">
+      <div class="panel-top">
+        <div class="panel-title">
+          <span class="dot live"></span>
+          <span>Live denoising</span>
+          <span class="model-tag" id="modelTag"></span>
+        </div>
+        <div class="readouts">
+          <div class="readout"><label>step</label><b id="stepOut">0</b></div>
+          <div class="readout"><label>t</label><b id="tOut">1.00</b></div>
+          <div class="readout"><label>masked</label><b id="maskOut">100%</b></div>
+        </div>
+      </div>
+
+      <div class="orderbar">
+        <span class="orderbar-label">reveal order</span>
+        <div class="seg" id="orderSeg">
+          <button class="seg-btn active" data-order="confidence">confidence</button>
+          <button class="seg-btn" data-order="confidence_weighted">weighted</button>
+          <button class="seg-btn" data-order="random">random</button>
+          <button class="seg-btn" data-order="corrected">self-correct</button>
+        </div>
+        <span class="order-note" id="orderNote"></span>
+      </div>
+
+      <div class="canvas-wrap">
+        <div id="canvas" class="token-canvas" aria-live="polite"></div>
+        <div class="scanline" id="scanline" aria-hidden="true"></div>
+      </div>
+
+      <div class="track"><div class="track-fill" id="trackFill"></div></div>
+
+      <div class="controls">
+        <button id="playBtn" class="ctl primary">❚❚ Pause</button>
+        <button id="restartBtn" class="ctl">↻ Restart</button>
+        <div class="speed">
+          <label>speed</label>
+          <input id="speed" type="range" min="0.3" max="3" step="0.1" value="1">
+        </div>
+        <div class="samples" id="sampleDots"></div>
+      </div>
+
+      <p class="hint">
+        The tokens <em>don't</em> appear in reading order. Switch the
+        <em>reveal order</em> above to compare commit strategies — surest-first
+        <em>confidence</em>, confidence-biased <em>weighted</em>, scattered
+        <em>random</em>, or <em>self-correct</em>, where the model re-masks its
+        shakiest commits and rewrites them with fuller context (watch the pink flashes).
+      </p>
+    </div>
+  </section>
+
+  <section id="how" class="wrap section">
+    <span class="kicker center">how it works</span>
+    <h2 class="center">Three ideas, no magic</h2>
+
+    <div class="cards">
+      <article class="card">
+        <div class="card-n">01</div>
+        <h3>Corrupt by masking</h3>
+        <p>
+          The forward process is dead simple: pick a noise level <code>t∈[0,1]</code>, then
+          independently replace each token with <code class="mask-chip">[MASK]</code> with
+          probability <code>σ(t)</code>. At <code>t=1</code> everything is masked; at
+          <code>t=0</code> nothing is. No Gaussian noise — text is categorical, so we corrupt
+          by <em>deletion</em> into a single absorbing state.
+        </p>
+      </article>
+      <article class="card">
+        <div class="card-n">02</div>
+        <h3>A DiT that reads both ways</h3>
+        <p>
+          A 12-layer Diffusion Transformer (adaLN-Zero conditioning on <code>t</code>) takes the
+          masked sequence and predicts the original token at <em>every</em> position at once.
+          Attention is fully <strong>bidirectional</strong> — each mask can use context from both
+          sides. That's what a causal LM can't do, and why order stops mattering.
+        </p>
+      </article>
+      <article class="card">
+        <div class="card-n">03</div>
+        <h3>Reveal by confidence</h3>
+        <p>
+          Sampling walks <code>t</code> from 1 down to 0. At each step the model scores every
+          masked slot; we <strong>commit the most confident ones</strong> and freeze them, then
+          re-run with that new context. Confidence is front-loaded where the text is predictable,
+          so the story crystallizes from its anchors outward.
+        </p>
+      </article>
+    </div>
+
+    <div class="compare">
+      <div class="compare-col">
+        <h4>Autoregressive LM</h4>
+        <div class="ar-row" id="arDemo"></div>
+        <p>One token at a time, strictly left → right. Position <code>k</code> can never see <code>k+1</code>.</p>
+      </div>
+      <div class="compare-col accent">
+        <h4>Masked diffusion (this model)</h4>
+        <div class="ar-row" id="diffDemo"></div>
+        <p>All positions in parallel, surest first. Every token sees the whole sequence.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="results" class="wrap section">
+    <span class="kicker center">the build</span>
+    <h2 class="center">What it took to make it coherent</h2>
+    <p class="section-lede center">
+      The architecture was the easy part. The thing that actually turned word-salad into
+      readable stories was the <strong>loss weighting</strong> — and it went against the textbook.
+    </p>
+
+    <div class="result-grid">
+      <div class="result-card big">
+        <h3>The one lever that mattered</h3>
+        <p>
+          The principled ELBO weight <code>w(t)=1/σ(t)</code> down-weights exactly the
+          high-mask regime that generation bootstraps from. Switching to a flat
+          <code>w(t)=1</code> was a phase change — same model, same data, same steps.
+        </p>
+        <div class="ce-bars">
+          <div class="ce-bar">
+            <span class="ce-label">ELBO weight <code>1/σ</code></span>
+            <div class="bar"><span style="width:100%"></span></div>
+            <span class="ce-val">CE 5.29 · word salad</span>
+          </div>
+          <div class="ce-bar good">
+            <span class="ce-label">uniform weight <code>w=1</code></span>
+            <div class="bar"><span style="width:42%"></span></div>
+            <span class="ce-val">CE 2.18 · readable stories</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-card">
+        <h3>The recipe</h3>
+        <ul class="spec">
+          <li><span>Data</span><b>TinyStories · 2.7M stories</b></li>
+          <li><span>Tokenizer</span><b>byte-level BPE · 8,192</b></li>
+          <li><span>Model</span><b>DiT · h768 · 12 layers</b></li>
+          <li><span>Schedule</span><b>cosine absorbing</b></li>
+          <li><span>Sampler</span><b>confidence, T≈0.9</b></li>
+          <li><span>Eval CE</span><b>2.18 (ppl ≈ 8.8)</b></li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="honest">
+      These are samples from a small model trained on a children's-story corpus, so expect
+      simple vocabulary and the occasional slip — what's remarkable is that grammatical,
+      structured stories emerge at all from a process that fills positions out of order.
+    </p>
+  </section>
+
+  <section class="wrap section cta-sec">
+    <div class="cta">
+      <h2>Read the build, or run it yourself</h2>
+      <p>
+        The repo includes a from-scratch course (<code>RESEARCH.md</code>), the full training
+        pipeline, and the script that captured every animation on this page.
+      </p>
+      <div class="cta-btns">
+        <a class="btn primary" href="https://github.com/tchauffi/diffusionlm-from-scratch" target="_blank" rel="noopener">View on GitHub ↗</a>
+        <a class="btn" href="#demo">Back to the demo</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-foot wrap">
+  <span>Built from scratch · masked absorbing-state diffusion · DiT on TinyStories</span>
+  <span class="foot-token">every animation is real model output</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
