@@ -7,11 +7,12 @@ the website animation: each frame is a list of ``[position, token_id]`` ops, whe
 lowest-confidence commits and re-predicts them, so positions can change mid-run.
 
 Usage:
+    # Pulls the model + tokenizer straight from the Hugging Face Hub:
     uv run python scripts/capture_trajectories.py \
-        --ckpt runs/dit-full-cont/final.pt \
-        --tokenizer tinystories_tokenizer \
         --out docs/trajectories.json \
         --n 96 --keep 6 --seq-len 80 --temperature 0.9
+
+    # ...or point --ckpt/--tokenizer at local files to use your own checkpoint.
 """
 
 import argparse
@@ -20,7 +21,7 @@ import math
 
 import torch
 
-from diffusionlm_from_scratch.model import DiT, DiTConfig
+from diffusionlm_from_scratch.model import DiT
 from diffusionlm_from_scratch.scheduler import AbsorbingScheduler
 from diffusionlm_from_scratch.dataset import build_tokenizer
 
@@ -226,8 +227,11 @@ def build_vocab(out_orders, tok):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", default="runs/dit-full-cont/final.pt")
-    ap.add_argument("--tokenizer", default="tinystories_tokenizer")
+    HF_REPO = "tchauffi/diffusionlm-from-scratch"
+    ap.add_argument("--ckpt", default=HF_REPO,
+                    help="HF Hub repo id or local *.pt checkpoint path")
+    ap.add_argument("--tokenizer", default=HF_REPO,
+                    help="HF Hub repo id or local tokenizer directory")
     ap.add_argument("--out", default="docs/trajectories.json")
     ap.add_argument("--n", type=int, default=96)
     ap.add_argument("--keep", type=int, default=6)
@@ -243,9 +247,7 @@ def main():
     tok, mask_id, vocab_size = build_tokenizer(args.tokenizer)
     eos_id = tok.eos_token_id
 
-    ck = torch.load(args.ckpt, map_location="cpu")
-    model = DiT(DiTConfig(**ck["config"])).to(device)
-    model.load_state_dict(ck.get("model", ck["raw"]))
+    model = DiT.from_pretrained(args.ckpt, device=device)
     print(f"loaded {args.ckpt}: {sum(p.numel() for p in model.parameters())/1e6:.0f}M params, vocab {vocab_size}")
 
     steps = args.steps or args.seq_len

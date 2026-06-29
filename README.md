@@ -32,14 +32,21 @@ Deploy by pointing **GitHub Pages** at the `docs/` folder
 
 Every trajectory in `docs/trajectories.json` is captured from a checkpoint by
 replaying the confidence sampler and recording which positions get committed at
-each step:
+each step. By default it pulls the model and tokenizer straight from the
+[Hugging Face Hub](https://huggingface.co/tchauffi/diffusionlm-from-scratch):
 
 ```bash
 uv run python scripts/capture_trajectories.py \
-    --ckpt runs/dit-full-cont/final.pt \
-    --tokenizer tinystories_tokenizer \
     --out docs/trajectories.json \
     --n 64 --keep 8 --seq-len 84 --temperature 0.85
+```
+
+Pass `--ckpt` / `--tokenizer` (a Hub repo id or a local path) to use your own
+checkpoint instead. Loading the model directly is a one-liner:
+
+```python
+from diffusionlm_from_scratch.model import DiT
+model = DiT.from_pretrained("tchauffi/diffusionlm-from-scratch")  # or a local *.pt
 ```
 
 ## Project layout

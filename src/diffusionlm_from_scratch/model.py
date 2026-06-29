@@ -178,6 +178,28 @@ class DiT(nn.Module):
         logits = self.final_layer(h, c)                  # (B, L, vocab_size)
         return logits
 
+    @classmethod
+    def from_pretrained(cls, source, device="cpu", filename="final.pt", weights="model"):
+        """Load a trained DiT from a local checkpoint or the Hugging Face Hub.
+
+        ``source`` is either a path to a ``*.pt`` checkpoint (carrying a
+        ``config`` dict plus ``model``/``raw`` state dicts) or a Hub repo id such
+        as ``"tchauffi/diffusionlm-from-scratch"``, in which case ``filename`` is
+        downloaded from the Hub. ``weights`` selects the state dict: ``"model"``
+        is the EMA weights, ``"raw"`` the un-averaged ones (falls back to
+        ``"raw"`` if the requested key is absent).
+        """
+        import os
+        if os.path.isfile(source):
+            ckpt_path = source
+        else:
+            from huggingface_hub import hf_hub_download
+            ckpt_path = hf_hub_download(source, filename)
+        ck = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        model = cls(DiTConfig(**ck["config"]))
+        model.load_state_dict(ck[weights] if weights in ck else ck["raw"])
+        return model.to(device)
+
 
 def DiT_small(vocab_size, max_seq_len=128, **kwargs):
     return DiT(DiTConfig(vocab_size=vocab_size, max_seq_len=max_seq_len,
