@@ -6,12 +6,14 @@ starts from a sequence of pure `[MASK]` and **denoises the whole sequence in
 parallel** — committing the tokens it is most confident about first, in whatever
 order the meaning falls into place.
 
-- **Course / write-up:** [`RESEARCH.md`](RESEARCH.md) — a from-scratch course on
-  discrete/text diffusion (D3PM → absorbing-state → sampling).
-- **Model:** a 142M-parameter DiT (h768 · 12 layers, bidirectional attention,
+**[▶ Live demo](https://tchauffi.github.io/diffusionlm-from-scratch/)** · [Model on 🤗 Hub](https://huggingface.co/tchauffi/diffusionlm-from-scratch) · [Course / write-up](RESEARCH.md)
+
+- **Model** — a 142M-parameter DiT (h768 · 12 layers, bidirectional attention,
   adaLN-Zero), 8,192-token byte-level BPE, eval cross-entropy **2.18**.
-- **The key finding:** uniform loss weighting (`w(t)=1`), *not* the textbook ELBO
-  weight `1/σ(t)`, was what turned word-salad into coherent stories.
+- **Key finding** — uniform loss weighting (`w(t)=1`), *not* the textbook ELBO
+  weight `1/σ(t)`, is what turned word-salad into coherent stories. The full
+  reasoning is in [`RESEARCH.md`](RESEARCH.md), a from-scratch course on
+  discrete/text diffusion (D3PM → absorbing-state → sampling).
 
 ## Generate text
 
@@ -33,25 +35,21 @@ the sampler knobs (`order`, `steps`, `corrector_frac`, `confidence_threshold`, �
 
 ## Demo site
 
-`docs/` is a self-contained static site that **animates real generations** from
-the trained model: each token lights up in the exact order the sampler committed
-it, tinted by its token ID like tiktoken.
+**[tchauffi.github.io/diffusionlm-from-scratch](https://tchauffi.github.io/diffusionlm-from-scratch/)**
+animates real generations: each token lights up in the exact order the sampler
+committed it, tinted by its token ID like tiktoken.
+
+Run it locally (the site `fetch()`es JSON, so it needs http, not `file://`):
 
 ```bash
-# serve locally (fetch() needs http, not file://)
-cd docs && python -m http.server 8765
-# then open http://localhost:8765
+cd docs && python -m http.server 8765   # then open http://localhost:8765
 ```
-
-Deploy by pointing **GitHub Pages** at the `docs/` folder
-(Settings → Pages → Branch: `main` / `docs`).
 
 ### Regenerating the animations
 
-Every trajectory in `docs/trajectories.json` is captured from a checkpoint by
-replaying the confidence sampler and recording which positions get committed at
-each step. By default it pulls the model and tokenizer straight from the
-[Hugging Face Hub](https://huggingface.co/tchauffi/diffusionlm-from-scratch):
+Every trajectory in `docs/trajectories.json` is captured by replaying the
+confidence sampler and recording which positions get committed at each step. By
+default it pulls the model and tokenizer straight from the Hub:
 
 ```bash
 uv run python scripts/capture_trajectories.py \
