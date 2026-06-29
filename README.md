@@ -13,6 +13,24 @@ order the meaning falls into place.
 - **The key finding:** uniform loss weighting (`w(t)=1`), *not* the textbook ELBO
   weight `1/σ(t)`, was what turned word-salad into coherent stories.
 
+## Generate text
+
+The trained model is on the
+[Hugging Face Hub](https://huggingface.co/tchauffi/diffusionlm-from-scratch).
+`DiffusionLM` bundles the model, tokenizer, and absorbing-state scheduler, so
+sampling stories is two lines:
+
+```python
+from diffusionlm_from_scratch import DiffusionLM
+
+lm = DiffusionLM.from_pretrained("tchauffi/diffusionlm-from-scratch")
+for story in lm.generate(n=4, seq_len=80, temperature=0.9):
+    print(story)
+```
+
+`from_pretrained` also accepts a local `*.pt` checkpoint, and `generate` exposes
+the sampler knobs (`order`, `steps`, `corrector_frac`, `confidence_threshold`, …).
+
 ## Demo site
 
 `docs/` is a self-contained static site that **animates real generations** from
@@ -42,20 +60,16 @@ uv run python scripts/capture_trajectories.py \
 ```
 
 Pass `--ckpt` / `--tokenizer` (a Hub repo id or a local path) to use your own
-checkpoint instead. Loading the model directly is a one-liner:
-
-```python
-from diffusionlm_from_scratch.model import DiT
-model = DiT.from_pretrained("tchauffi/diffusionlm-from-scratch")  # or a local *.pt
-```
+checkpoint instead.
 
 ## Project layout
 
 | Path | What |
 |------|------|
-| `src/diffusionlm_from_scratch/model.py` | the DiT (timestep embedding, adaLN-Zero blocks) |
+| `src/diffusionlm_from_scratch/model.py` | the DiT (timestep embedding, adaLN-Zero blocks) + `from_pretrained` |
 | `src/diffusionlm_from_scratch/scheduler.py` | absorbing-state forward corruption + loss weights |
-| `src/diffusionlm_from_scratch/trainer.py` | training loop + confidence/predictor-corrector sampler |
+| `src/diffusionlm_from_scratch/inference.py` | `DiffusionLM` pipeline + confidence/predictor-corrector sampler |
+| `src/diffusionlm_from_scratch/trainer.py` | training loop, optimizers, EMA, periodic eval/sampling |
 | `src/diffusionlm_from_scratch/dataset.py` | TinyStories tokenization pipeline |
 | `scripts/capture_trajectories.py` | exports denoising trajectories for the site |
 | `docs/` | the animated showcase site |
